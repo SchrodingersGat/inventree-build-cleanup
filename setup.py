@@ -23,7 +23,7 @@ with open("README.md", encoding="utf-8") as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="inventree-cleanup-build-orders",
+    name="inventree-build-cleanup",
     version=cleanup_build_orders.PLUGIN_VERSION,
     author="Oliver Walters",
     author_email="oliver.henry.walters@gmail.com",
