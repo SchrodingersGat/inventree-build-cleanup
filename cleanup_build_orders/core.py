@@ -54,7 +54,7 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         },
     }
 
-    def remove_old_items(self):
+    def remove_old_items(self, dry_run: bool = False):
         """Remove stock items from old build orders.
 
         We remove from the database any stock items which have been consumed,
@@ -100,7 +100,11 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         N = items.count()
         M = 0
 
-        logger.info("CleanupBuildOrders: Deleting %s items", N)
+        logger.warning("CleanupBuildOrders: Deleting %s items", N)
+
+        if dry_run:
+            logger.info("CleanupBuildOrders: Dry run - not deleting items")
+            return
 
         # Delete the items
         # Notes:
@@ -108,10 +112,8 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         #  - This may be slow for large datasets, but is necessary to avoid integrity errors
         #  - If the task fails due to timeout, the other items will be deleted next time
         for item in items:
-            try:
-                item.delete()
-                M += 1
-            except Exception as e:
-                logger.exception("Failed to delete stock item: %s", e)
+            item.refresh_from_db()  # Ensure we have the latest data
+            item.delete()
+            M += 1
 
-        logger.info("CleanupBuildOrders: Deleted %s items", M)
+        logger.warning("CleanupBuildOrders: Deleted %s items", M)
