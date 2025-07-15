@@ -1,7 +1,10 @@
 """Remove consumed stock from old build orders"""
 
+import structlog
+
 from datetime import timedelta
 
+from django.core.validators import MinValueValidator
 from django.db.models import Q
 
 from plugin import InvenTreePlugin
@@ -11,12 +14,15 @@ from plugin.mixins import ScheduleMixin, SettingsMixin
 from . import PLUGIN_VERSION
 
 
+logger = structlog.get_logger("inventree")
+
+
 class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
     """CleanupBuildOrders - custom InvenTree plugin."""
 
     # Plugin metadata
     TITLE = "Cleanup Build Orders"
-    NAME = "CleanupBuildOrders"
+    NAME = "Cleanup Build Orders"
     SLUG = "cleanup-build-orders"
     DESCRIPTION = "Remove consumed stock from old build orders"
     VERSION = PLUGIN_VERSION
@@ -26,29 +32,29 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
     WEBSITE = "https://github.com/SchrodingersGat/inventree-clean-builds"
     LICENSE = "MIT"
 
-    # Optionally specify supported InvenTree versions
-    # MIN_VERSION = '0.18.0'
-    # MAX_VERSION = '2.0.0'
+    MIN_VERSION = "0.18.0"
+    MONTHS_DEFAULT = 24
 
     # Scheduled tasks (from ScheduleMixin)
-    # Ref: https://docs.inventree.org/en/latest/plugins/mixins/schedule/
     SCHEDULED_TASKS = {
-        # Define your scheduled tasks here...
-    }
-
-    # Plugin settings (from SettingsMixin)
-    # Ref: https://docs.inventree.org/en/latest/plugins/mixins/settings/
-    SETTINGS = {
-        # Define your plugin settings here...
-        "CUSTOM_VALUE": {
-            "name": "Custom Value",
-            "description": "A custom value",
-            "validator": int,
-            "default": 42,
+        "remove_old_items": {
+            "func": "remove_old_items",
+            "schedule": "D",
         }
     }
 
-    def remove_old_items(self):
+    # Plugin settings (from SettingsMixin)
+    SETTINGS = {
+        "STOCK_DELETE_PERIOD": {
+            "name": "Stock Delete Period",
+            "description": "How long to keep stock history records before deletion",
+            "validator": [int, MinValueValidator(6)],
+            "default": MONTHS_DEFAULT,
+            "units": "months",
+        },
+    }
+
+    def remove_old_items(self, dry_run: bool = False):
         """Remove stock items from old build orders.
 
         We remove from the database any stock items which have been consumed,
@@ -60,6 +66,7 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         - The stock item does not have a serial number
         """
 
+        from build.status_codes import BuildStatusGroups
         from InvenTree.helpers import current_date
         from stock.models import StockItem
 
@@ -74,10 +81,15 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         # Exclude those items which are not associated with a completed build order
         items = items.exclude(consumed_by__isnull=True)
 
-        # Exclude orders which were completed "recently"
+        # Exclude active build orders
+        items = items.exclude(consumed_by__status__in=BuildStatusGroups.ACTIVE_CODES)
+        items = items.exclude(consumed_by__completion_date__isnull=True)
 
-        # TODO: Use a setting for this
-        threshold_days = 180
+        # Exclude orders which were completed "recently"
+        threshold_months = int(
+            self.get_setting("STOCK_DELETE_PERIOD", backup_value=self.MONTHS_DEFAULT)
+        )
+        threshold_days = threshold_months * 30
 
         threshold_date = current_date() - timedelta(days=threshold_days)
 
@@ -86,5 +98,22 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         )
 
         N = items.count()
+        M = 0
 
-        print(f"Found {N} items to delete...")
+        logger.warning("CleanupBuildOrders: Deleting %s items", N)
+
+        if dry_run:
+            logger.info("CleanupBuildOrders: Dry run - not deleting items")
+            return
+
+        # Delete the items
+        # Notes:
+        #  - The items are deleted individually to ensure that any FK relationships are observed
+        #  - This may be slow for large datasets, but is necessary to avoid integrity errors
+        #  - If the task fails due to timeout, the other items will be deleted next time
+        for item in items:
+            item.refresh_from_db()  # Ensure we have the latest data
+            item.delete()
+            M += 1
+
+        logger.warning("CleanupBuildOrders: Deleted %s items", M)
