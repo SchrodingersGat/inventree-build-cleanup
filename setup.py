@@ -48,4 +48,9 @@ setuptools.setup(
             "CleanupBuildOrders = cleanup_build_orders.core:CleanupBuildOrders"
         ]
     },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Operating System :: OS Independent",
+        "Framework :: InvenTree",
+    ],
 )
