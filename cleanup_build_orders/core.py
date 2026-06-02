@@ -103,7 +103,10 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         )
 
         N = items.count()
-        M = 0
+
+        if N == 0:
+            logger.info("CleanupBuildOrders: No items eligible for deletion")
+            return
 
         logger.info("CleanupBuildOrders: %s items eligible for deletion", N)
 
@@ -115,6 +118,8 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         self.set_setting("CONFIRM_DELETE", False)
 
         logger.warning("CleanupBuildOrders: Deleting %s items", N)
+
+        M = 0
 
         # Delete the items
         # Notes:
