@@ -39,7 +39,7 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
     SCHEDULED_TASKS = {
         "remove_old_items": {
             "func": "remove_old_items",
-            "schedule": "D",
+            "schedule": "W",
         }
     }
 
