@@ -58,27 +58,28 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
             "default": False,
             "validator": bool,
         },
-        "NOTIFY_GROUP": {
-            "name": "Notification Group",
-            "description": "User group to notify when items are pending deletion. If not set, all active superusers are notified.",
-            "model": "auth.group",
+        "NOTIFY_OWNER": {
+            "name": "Notification Owner",
+            "description": "User or group to notify when items are pending deletion. If not set, all active superusers are notified.",
+            "model": "users.owner",
             "default": "",
             "required": False,
         },
     }
 
     def _get_notification_targets(self):
-        """Return a list of targets (User or Group) to notify about pending deletions."""
+        """Return a list of User instances to notify about pending deletions."""
         from django.contrib.auth import get_user_model
-        from django.contrib.auth.models import Group
+        from users.models import Owner
 
-        group_id = self.get_setting("NOTIFY_GROUP")
+        owner_id = self.get_setting("NOTIFY_OWNER")
 
-        if group_id:
+        if owner_id:
             try:
-                return [Group.objects.get(pk=group_id)]
-            except Group.DoesNotExist:
-                logger.warning("CleanupBuildOrders: Notification group %s not found", group_id)
+                owner = Owner.objects.get(pk=owner_id)
+                return [o.owner for o in owner.get_related_owners(include_group=False)]
+            except Owner.DoesNotExist:
+                logger.warning("CleanupBuildOrders: Notification owner %s not found", owner_id)
 
         return list(get_user_model().objects.filter(is_superuser=True, is_active=True))
 

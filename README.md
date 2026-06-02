@@ -52,17 +52,17 @@ Acts as a one-shot authorisation gate. When set to `True`, the next scheduled ru
 
 When this setting is `False` (the default), the scheduled task skips deletion and instead sends a notification summarising the items that are pending removal.
 
-### Notification Group
+### Notification Owner
 
 | | |
 |---|---|
-| Key | `NOTIFY_GROUP` |
-| Type | User Group |
+| Key | `NOTIFY_OWNER` |
+| Type | Owner (User or Group) |
 | Default | *(not set)* |
 
-The user group to notify when items are pending deletion. Every member of the selected group receives an email listing the eligible stock items, grouped by build order.
+The user or group to notify when items are pending deletion. Accepts an InvenTree *Owner*, which can be either a single user or a user group — if a group is chosen, every member receives the notification email listing the eligible stock items, grouped by build order.
 
-If no group is configured, the notification is sent to all active superuser accounts instead.
+If no owner is configured, the notification is sent to all active superuser accounts instead.
 
 ## Usage
 
