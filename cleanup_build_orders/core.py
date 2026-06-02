@@ -58,7 +58,73 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
             "default": False,
             "validator": bool,
         },
+        "NOTIFY_GROUP": {
+            "name": "Notification Group",
+            "description": "User group to notify when items are pending deletion. If not set, all active superusers are notified.",
+            "model": "auth.group",
+            "default": "",
+            "required": False,
+        },
     }
+
+    def _get_notification_targets(self):
+        """Return a list of targets (User or Group) to notify about pending deletions."""
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+
+        group_id = self.get_setting("NOTIFY_GROUP")
+
+        if group_id:
+            try:
+                return [Group.objects.get(pk=group_id)]
+            except Group.DoesNotExist:
+                logger.warning("CleanupBuildOrders: Notification group %s not found", group_id)
+
+        return list(get_user_model().objects.filter(is_superuser=True, is_active=True))
+
+    def _notify_pending_deletion(self, items, threshold_date, N):
+        """Send a notification that stock items are pending deletion."""
+        from common.notifications import trigger_notification
+        from InvenTree.helpers_model import construct_absolute_url
+
+        build_map = {}
+        for item in items.select_related("consumed_by", "part"):
+            build = item.consumed_by
+            if build.pk not in build_map:
+                build_map[build.pk] = {
+                    "build": build,
+                    "build_url": construct_absolute_url(build.get_absolute_url()),
+                    "items": [],
+                }
+            build_map[build.pk]["items"].append({
+                "item": item,
+                "item_url": construct_absolute_url(item.get_absolute_url()),
+            })
+
+        context = {
+            "name": "Old Build Order Stock Items",
+            "message": f"{N} stock items from old build orders are scheduled for deletion",
+            "build_groups": list(build_map.values()),
+            "threshold_date": threshold_date,
+            "template": {
+                "html": "email/old_build_items.html",
+                "subject": f"[InvenTree] {N} old build stock items pending deletion",
+            },
+        }
+
+        targets = self._get_notification_targets()
+
+        if not targets:
+            logger.warning("CleanupBuildOrders: No notification targets found")
+            return
+
+        trigger_notification(
+            items.first(),
+            "cleanup_build_orders.pending_deletion",
+            targets=targets,
+            context=context,
+            check_recent=False,
+        )
 
     def remove_old_items(self):
         """Remove stock items from old build orders.
@@ -112,6 +178,7 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
 
         if not self.get_setting("CONFIRM_DELETE"):
             logger.info("CleanupBuildOrders: CONFIRM_DELETE not set - skipping deletion")
+            self._notify_pending_deletion(items, threshold_date, N)
             return
 
         # Reset the confirmation flag immediately so deletion only runs once

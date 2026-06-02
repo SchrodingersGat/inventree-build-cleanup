@@ -1,0 +1,53 @@
+{% extends "email/email.html" %}
+
+{% load i18n %}
+{% load inventree_extras %}
+
+{% block header %}
+<tr style="background: #eef3f7; height: 4rem; text-align: center;">
+    <td colspan="3" style="padding-bottom: 1rem; color: #68686a; font-weight: bold;">
+        <p style="font-size: 1.25rem;">{{ message }}</p>
+        <p>{% trans "Enable the 'Confirm Deletion' setting in the Cleanup Build Orders plugin to proceed." %}</p>
+    </td>
+</tr>
+{% endblock header %}
+
+{% block body %}
+{% for group in build_groups %}
+<tr style="background-color: #f0f4f8;">
+    <td colspan="3" style="padding: 10px 14px; font-weight: bold; border-top: 2px solid #c8d6e0;">
+        <a href="{{ group.build_url }}" style="color: #2c5f8a; text-decoration: none; font-size: 1rem;">
+            {{ group.build }}
+        </a>
+        <span style="color: #68686a; font-weight: normal; margin-left: 1em; font-size: 0.9rem;">
+            {% trans "Completed" %}: {{ group.build.completion_date|date:"Y-m-d" }}
+        </span>
+    </td>
+</tr>
+<tr style="background-color: #f5f5f5; border-bottom: 1px solid #ddd;">
+    <td style="padding: 6px 14px; font-weight: bold; color: #444;">{% trans "Part" %}</td>
+    <td style="padding: 6px 14px; font-weight: bold; color: #444; text-align: right;">{% trans "Quantity" %}</td>
+    <td style="padding: 6px 14px; font-weight: bold; color: #444;">{% trans "Batch" %}</td>
+</tr>
+{% for entry in group.items %}
+<tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 6px 14px;">
+        <a href="{{ entry.item_url }}" style="color: #007bff; text-decoration: none;">
+            {{ entry.item.part.full_name }}
+        </a>
+    </td>
+    <td style="padding: 6px 14px; text-align: right;">{% decimal entry.item.quantity %}</td>
+    <td style="padding: 6px 14px; color: #666;">{{ entry.item.batch|default:"-" }}</td>
+</tr>
+{% endfor %}
+{% endfor %}
+{% endblock body %}
+
+{% block footer %}
+<tr style="background: #eef3f7; height: 2rem;">
+    <td colspan="3" style="padding-top: 1rem; text-align: center;">
+        <p><em>{% blocktrans with date=threshold_date|date:"Y-m-d" %}Stock items consumed by build orders completed before {{ date }} are eligible for deletion.{% endblocktrans %}</em></p>
+        <p><em><small>{% inventree_version shortstring=True %} - <a href="https://docs.inventree.org">InvenTree Documentation</a></small></em></p>
+    </td>
+</tr>
+{% endblock footer %}
