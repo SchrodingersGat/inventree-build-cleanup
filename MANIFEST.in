@@ -1,1 +1,2 @@
 recursive-include cleanup_build_orders/static *
+recursive-include cleanup_build_orders/templates *
