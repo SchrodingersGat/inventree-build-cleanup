@@ -1,6 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/inventree-build-cleanup)](https://pypi.org/project/inventree-build-cleanup/)
-![PEP](https://github.com/SchrodingersGat/inventree-build-cleanup/actions/workflows/pep.yaml/badge.svg)
+![PEP](https://github.com/SchrodingersGat/inventree-build-cleanup/actions/workflows/ci.yaml/badge.svg)
 
 
 # CleanupBuildOrders
