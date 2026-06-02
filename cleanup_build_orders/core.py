@@ -46,8 +46,8 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
     # Plugin settings (from SettingsMixin)
     SETTINGS = {
         "STOCK_DELETE_PERIOD": {
-            "name": "Stock Delete Period",
-            "description": "How long to keep stock history records before deletion",
+            "name": "Build Cleanup Period",
+            "description": "How long to keep build order stock consumption records before deletion",
             "validator": [int, MinValueValidator(6)],
             "default": MONTHS_DEFAULT,
             "units": "months",
@@ -112,7 +112,33 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         #  - This may be slow for large datasets, but is necessary to avoid integrity errors
         #  - If the task fails due to timeout, the other items will be deleted next time
         for item in items:
-            item.refresh_from_db()  # Ensure we have the latest data
+            # Ensure we have the latest data
+            item.refresh_from_db()
+
+            # Double check that all of our criteria are still met before deletion
+            if item.serial not in [None, ""]:
+                continue
+
+            # Item should not be installed in another assembly
+            if item.belongs_to:
+                continue
+
+            # Item should be associated with a completed build order
+            if not item.consumed_by:
+                continue
+
+            # Item should not be associated with an active build order
+            if item.consumed_by.status in BuildStatusGroups.ACTIVE_CODES:
+                continue
+
+            # Item should be associated with a build order which was completed before the threshold date
+            if item.consumed_by.completion_date is None:
+                continue
+
+            # Item should not be associated with a build order which was completed "recently"
+            if item.consumed_by.completion_date >= threshold_date:
+                continue
+
             item.delete()
             M += 1
 
