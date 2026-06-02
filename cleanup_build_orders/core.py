@@ -2,7 +2,7 @@
 
 import structlog
 
-from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 
 from django.core.validators import MinValueValidator
 from django.db.models import Q
@@ -52,9 +52,15 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
             "default": MONTHS_DEFAULT,
             "units": "months",
         },
+        "CONFIRM_DELETE": {
+            "name": "Confirm Deletion",
+            "description": "Enable to allow deletion on the next scheduled run. Automatically reset to False after each run.",
+            "default": False,
+            "validator": bool,
+        },
     }
 
-    def remove_old_items(self, dry_run: bool = False):
+    def remove_old_items(self):
         """Remove stock items from old build orders.
 
         We remove from the database any stock items which have been consumed,
@@ -89,9 +95,8 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         threshold_months = int(
             self.get_setting("STOCK_DELETE_PERIOD", backup_value=self.MONTHS_DEFAULT)
         )
-        threshold_days = threshold_months * 30
 
-        threshold_date = current_date() - timedelta(days=threshold_days)
+        threshold_date = current_date() - relativedelta(months=threshold_months)
 
         items = items.filter(
             consumed_by__completion_date__lt=threshold_date,
@@ -100,11 +105,16 @@ class CleanupBuildOrders(ScheduleMixin, SettingsMixin, InvenTreePlugin):
         N = items.count()
         M = 0
 
-        logger.warning("CleanupBuildOrders: Deleting %s items", N)
+        logger.info("CleanupBuildOrders: %s items eligible for deletion", N)
 
-        if dry_run:
-            logger.info("CleanupBuildOrders: Dry run - not deleting items")
+        if not self.get_setting("CONFIRM_DELETE"):
+            logger.info("CleanupBuildOrders: CONFIRM_DELETE not set - skipping deletion")
             return
+
+        # Reset the confirmation flag immediately so deletion only runs once
+        self.set_setting("CONFIRM_DELETE", False)
+
+        logger.warning("CleanupBuildOrders: Deleting %s items", N)
 
         # Delete the items
         # Notes:
